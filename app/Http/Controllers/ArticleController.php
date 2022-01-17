@@ -5,13 +5,17 @@ namespace App\Http\Controllers;
 use App\Article;
 use App\Photo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+
+use App\Http\Middleware\IsAdmin;
 
 class ArticleController extends Controller
 {
     public function __construct(){
         $this->middleware('auth');
+        //$this->middleware('isAdmin');
     }
     /**
      * Display a listing of the resource.
@@ -20,7 +24,19 @@ class ArticleController extends Controller
      */
     public function index()
     {
-        $articles = Article::orderBy("id","desc")->paginate(5);
+        // if(Auth::user()->role == 0){
+        //     $articles = Article::orderBy("id","desc")->paginate(5);
+        // }else{
+        //     $articles = Article::where('user_id',Auth::id())->orderBy("id","desc")->paginate(5);
+        // }
+
+        $articles = Article::when(Auth::user()->role!=0,function($query){
+            $query-> where('user_id',Auth::id());
+        })->when(request()->search,function($query){
+            $searchKey = request()->search;
+            $query -> where("title","LIKE","%$searchKey%")->orWhere('description','LIKE',"%$searchKey%");
+        })->with(['getUser','getPhotos'])->orderBy("id","desc")->paginate(5);
+        
         return view('article.index',compact('articles'));
     }
 
@@ -124,22 +140,25 @@ class ArticleController extends Controller
      */
     public function destroy(Article $article)
     {
-        if(isset($article->getPhotos)){
-            $dir = "/public/article/";
-            foreach($article->getPhotos as $p){
-                Storage::delete($dir.$p->location);
+        if(Gate::allows('article-delete',$article)){
+            if(isset($article->getPhotos)){
+                $dir = "/public/article/";
+                foreach($article->getPhotos as $p){
+                    Storage::delete($dir.$p->location);
+                }
+                $toDel = $article->getPhotos->pluck("id");
+                Photo::destroy($toDel);
             }
-            $toDel = $article->getPhotos->pluck("id");
-            Photo::destroy($toDel);
+            $title = $article->title;
+            $article->delete();
+            return redirect()->route('article.index')->with('status',"<b>$title</b> is deleted.");
         }
-        $title = $article->title;
-        $article->delete();
-        return redirect()->route('article.index')->with('status',"<b>$title</b> is deleted.");
+        return abort(404);        
     }
 
-    public function search(Request $request){
-        $searchKey = $request->search;
-        $articles = Article::where('title',"LIKE","%$searchKey%")->orWhere('description',"LIKE","%$searchKey%") ->paginate(5);
-        return view('article.index',compact('articles'));
-    }
+    // public function search(Request $request){
+    //     $searchKey = $request->search;
+    //     $articles = Article::where('title',"LIKE","%$searchKey%")->orWhere('description',"LIKE","%$searchKey%") ->paginate(5);
+    //     return view('article.index',compact('articles'));
+    // }
 }

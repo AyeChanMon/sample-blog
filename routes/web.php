@@ -24,8 +24,9 @@ Route::prefix("user-dashboard")->group(function(){
     Route::get('/profile','ProfileController@edit')->name('profile.edit');
     Route::post('/profile','ProfileController@update')->name('profile.update');
     Route::post("/profile/change-password","ProfileController@changePassword")->name('profile.changePassword');
+    Route::get("/use-phone","HomeController@usePhone")->middleware('isAdmin')->name('use.phone');
 });
 
-Route::get("article-search","ArticleController@search")->name('article.search');
+//Route::get("article-search","ArticleController@search")->name('article.search');
 
 
